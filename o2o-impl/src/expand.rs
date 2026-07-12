@@ -2,7 +2,7 @@ use std::{collections::HashMap, iter::Peekable, slice::Iter};
 
 use crate::{
     ast::{DataType, DataTypeMember, Enum, Field, Struct, Variant},
-    attr::{ApplicableAttr, ChildParentData, ChildPath, DataTypeAttrs, GhostData, GhostIdent, Kind, MemberAttrCore, ParentChildField, TraitAttrCore, TypeHint},
+    attr::{ApplicableAttr, ChildParentData, ChildPath, DataTypeAttrs, Factory, GhostData, GhostIdent, Kind, MemberAttrCore, ParentChildField, TraitAttrCore, TypeHint},
     validate::validate,
 };
 use proc_macro2::{Span, TokenStream};
@@ -60,12 +60,16 @@ struct ImplContext<'a> {
 
 struct ChildRenderContext<'a> {
     pub ty: &'a syn::Path,
-    pub type_hint: TypeHint
+    pub type_hint: TypeHint,
+    pub closure: Option<&'a syn::ExprClosure>
 }
 
 impl<'a> From<&'a ChildParentData> for ChildRenderContext<'a> {
     fn from(value: &'a ChildParentData) -> Self {
-        ChildRenderContext { ty: &value.ty, type_hint: value.type_hint }
+        match &value.factory {
+            Factory::Path(path, type_hint) => ChildRenderContext { ty: &path, type_hint: *type_hint, closure: None },
+            Factory::Closure(path, closure) => ChildRenderContext { ty: &path, type_hint: TypeHint::Unspecified, closure: Some(&closure) }
+        }
     }
 }
 
@@ -225,10 +229,22 @@ fn main_code_block_ok(ctx: &ImplContext) -> TokenStream {
 fn struct_main_code_block(input: &Struct, ctx: &ImplContext) -> TokenStream {
     let struct_init_block = struct_init_block(input, ctx);
 
+    let child_factories: Vec<(TokenStream, &syn::ExprClosure)> = input.attrs.child_parents_attrs.iter()
+        .flat_map(|cp| cp.child_parents.iter()
+            .filter_map(|cp|
+                if let Factory::Closure(_, c ) = &cp.factory { Some((cp.field_path.to_token_stream(), c)) } else { None }
+            )
+        ).collect();
+    let closure_fragment = child_factories.iter().map(|(n, f)| quote!(let #n = #f));
+
     match ctx.kind {
         Kind::FromOwned | Kind::FromRef => {
             let dst = ctx.dst_ty;
-            quote!(#dst #struct_init_block)
+            if child_factories.is_empty() {
+                quote!(#dst #struct_init_block)
+            } else {
+                quote!(#(#closure_fragment);*; #dst #struct_init_block)
+            }
         },
         Kind::OwnedInto | Kind::RefInto => {
             let dst = if ctx.struct_attr.ty.nameless_tuple || ctx.has_post_init {
@@ -236,7 +252,11 @@ fn struct_main_code_block(input: &Struct, ctx: &ImplContext) -> TokenStream {
             } else {
                 ctx.dst_ty.clone()
             };
-            quote!(#dst #struct_init_block)
+            if child_factories.is_empty() {
+                quote!(#dst #struct_init_block)
+            } else {
+                quote!(#(#closure_fragment);*; #dst #struct_init_block)
+            }
         },
         Kind::OwnedIntoExisting | Kind::RefIntoExisting => struct_init_block,
     }
@@ -545,7 +565,7 @@ fn render_parent_child_fragment<F: Fn() -> TokenStream>(
         let new_depth = depth.map_or(0, |x|x+1);
         if ctx.kind.is_from() {
             let ty = if let Some(depth) = depth { parent_child_field.sub_path[depth].1.as_ref().unwrap() } else { field.ty.as_ref().unwrap() };
-            let child_data = ChildRenderContext { ty, type_hint: ctx.struct_attr.type_hint };
+            let child_data = ChildRenderContext { ty, type_hint: ctx.struct_attr.type_hint, closure: None };
             let child_path = ChildPath::new(field.member.clone(), parent_child_field.sub_path.iter().map(|x|x.0.clone()));
             render_child(&child_data, fields, named_fields, ctx, (&child_path, new_depth), if ctx.input.named_fields() {TypeHint::Struct} else {TypeHint::Tuple})
         } else {
@@ -617,8 +637,13 @@ fn render_child(
     let child_name = child_path.child_path[field_ctx.1].to_token_stream();
     let ty = &child_data.ty;
     let init = struct_init_block_inner(fields, named_fields, ctx, Some((field_ctx.0, Some(child_data), field_ctx.1)));
+    let closure = child_data.closure;
     match (ctx.input.named_fields(), hint) {
-        (true, TypeHint::Struct | TypeHint::Unspecified) => quote!(#child_name: #ty #init,),
+        (true, TypeHint::Struct | TypeHint::Unspecified) => if let Some(_) = closure {
+            quote!(#child_name: #child_name(#ty #init),)
+        } else {
+            quote!(#child_name: #ty #init,)
+        },
         (true, TypeHint::Tuple) => quote!(#ty #init,),
         (false, TypeHint::Tuple | TypeHint::Unspecified) => quote!(#ty #init,),
         (false, TypeHint::Struct) => quote!(#child_name: #ty #init,),

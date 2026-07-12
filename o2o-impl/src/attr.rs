@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::fmt::Display;
+use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
 use std::ops::{Index, Not};
 
@@ -446,7 +446,7 @@ impl<'a> MemberAttrs {
     }
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum TypeHint {
     Unit = 0,
     Struct = 1,
@@ -808,6 +808,15 @@ pub(crate) struct ChildParentsAttr {
     pub child_parents: Punctuated<ChildParentData, Token![,]>,
 }
 
+impl Debug for ChildParentsAttr {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut debug = f.debug_struct("ChildParentsAttr");
+        debug.field("container_ty", &self.container_ty.as_ref().map(|x| x.path_str.clone()));
+        self.child_parents.iter().enumerate().for_each(|(idx, x)| { debug.field(format!("child_parent_{idx}").as_ref(), x); });
+        debug.finish()
+    }
+}
+
 impl Parse for ChildParentsAttr {
     fn parse(input: ParseStream) -> Result<Self> {
         Ok(ChildParentsAttr {
@@ -818,8 +827,7 @@ impl Parse for ChildParentsAttr {
 }
 
 pub(crate) struct ChildParentData {
-    pub ty: syn::Path,
-    pub type_hint: TypeHint,
+    pub factory: Factory,
     pub field_path: Punctuated<Member, Token![.]>,
     field_path_str: String,
 }
@@ -827,6 +835,21 @@ pub(crate) struct ChildParentData {
 impl ChildParentData {
     pub(crate) fn check_match(&self, path: &str) -> bool {
         self.field_path_str == path
+    }
+}
+
+impl Debug for ChildParentData {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut debug = f.debug_struct("ChildPath");
+        debug.field("ty", &self.factory);
+        debug.field("field_path_str", &self.field_path_str);
+        self.field_path.iter().enumerate().for_each(|(idx, x)| {
+            debug.field(format!("field_path_{idx}").as_ref(), &match x {
+                Member::Named(_) => "Named",
+                Member::Unnamed(_) => "Unnamed"
+            });
+        });
+        debug.finish()
     }
 }
 
@@ -1449,10 +1472,10 @@ fn try_parse_child_parents(input: ParseStream) -> Result<Punctuated<ChildParentD
     input.parse_terminated(|x| {
         let child_path: Punctuated<Member, Token![.]> = Punctuated::parse_separated_nonempty(x)?;
         x.parse::<Token![:]>()?;
-        let ty = x.parse::<syn::Path>()?;
+        let ty = x.parse::<Factory>()?;
+
         Ok(ChildParentData {
-            ty,
-            type_hint: try_parse_type_hint(x)?,
+            factory: ty,
             field_path: child_path.clone(),
             field_path_str: child_path.to_token_stream().to_string().chars().filter(|c| !c.is_whitespace()).collect(),
         })
@@ -1464,10 +1487,10 @@ fn try_parse_child_parents(input: ParseStream) -> Result<Punctuated<ChildParentD
     input.parse_terminated(|x| {
         let child_path: Punctuated<Member, Token![.]> = Punctuated::parse_separated_nonempty(x)?;
         x.parse::<Token![:]>()?;
-        let ty = x.parse::<syn::Path>()?;
+        let ty = x.parse::<Factory>()?;
+
         Ok(ChildParentData {
-            ty,
-            type_hint: try_parse_type_hint(x)?,
+            factory: ty,
             field_path: child_path.clone(),
             field_path_str: child_path.to_token_stream().to_string().chars().filter(|c| !c.is_whitespace()).collect(),
         })
@@ -1560,3 +1583,50 @@ fn build_child_path_str(child_path: &Punctuated<Member, Token![.]>) -> Vec<Strin
     });
     child_path_str
 }
+
+pub(crate) enum Factory {
+    Path(syn::Path, TypeHint),
+    Closure(syn::Path, syn::ExprClosure),
+}
+
+impl Debug for Factory {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Factory::Path(path, type_hint) => {
+                f.debug_tuple("DataType::Path")
+                    .field(&path.to_token_stream().to_string())
+                    .field(type_hint)
+                    .finish()
+            }
+            Factory::Closure(path, closure) => {
+                f.debug_tuple("DataType::Closure")
+                    .field(&path.to_token_stream().to_string())
+                    .field(&closure.to_token_stream().to_string())
+                    .finish() }
+        }
+    }
+}
+
+impl Parse for Factory {
+    fn parse(input: ParseStream) -> Result<Self> {
+        if input.peek(Token![|]) {
+            let closure =
+                input.parse::<syn::ExprClosure>()?;
+            let first_arg = closure.inputs.first().ok_or(syn::Error::new(input.span(), "Closure has too few arguments"))?;
+
+            if let syn::Pat::Type(pat_type) = first_arg {
+                if let syn::Type::Path(type_path) = &*pat_type.ty {
+                    Ok(Factory::Closure(type_path.path.clone(), closure))
+                } else {
+                    Err(syn::Error::new(input.span(), "Closure has no type"))
+                }
+            } else {
+                Err(syn::Error::new(input.span(), "Closure argument has no type"))
+            }
+        } else {
+            let path = input.parse::<syn::ExprPath>()?;
+            Ok(Factory::Path(path.path, try_parse_type_hint(input)?))
+        }
+    }
+}
+
