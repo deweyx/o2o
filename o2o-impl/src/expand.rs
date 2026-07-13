@@ -229,22 +229,10 @@ fn main_code_block_ok(ctx: &ImplContext) -> TokenStream {
 fn struct_main_code_block(input: &Struct, ctx: &ImplContext) -> TokenStream {
     let struct_init_block = struct_init_block(input, ctx);
 
-    let child_factories: Vec<(TokenStream, &syn::ExprClosure)> = input.attrs.child_parents_attrs.iter()
-        .flat_map(|cp| cp.child_parents.iter()
-            .filter_map(|cp|
-                if let Factory::Closure(_, c ) = &cp.factory { Some((cp.field_path.to_token_stream(), c)) } else { None }
-            )
-        ).collect();
-    let closure_fragment = child_factories.iter().map(|(n, f)| quote!(let #n = #f));
-
     match ctx.kind {
         Kind::FromOwned | Kind::FromRef => {
             let dst = ctx.dst_ty;
-            if child_factories.is_empty() {
-                quote!(#dst #struct_init_block)
-            } else {
-                quote!(#(#closure_fragment);*; #dst #struct_init_block)
-            }
+            quote!(#dst #struct_init_block)
         },
         Kind::OwnedInto | Kind::RefInto => {
             let dst = if ctx.struct_attr.ty.nameless_tuple || ctx.has_post_init {
@@ -252,11 +240,7 @@ fn struct_main_code_block(input: &Struct, ctx: &ImplContext) -> TokenStream {
             } else {
                 ctx.dst_ty.clone()
             };
-            if child_factories.is_empty() {
-                quote!(#dst #struct_init_block)
-            } else {
-                quote!(#(#closure_fragment);*; #dst #struct_init_block)
-            }
+            quote!(#dst #struct_init_block)
         },
         Kind::OwnedIntoExisting | Kind::RefIntoExisting => struct_init_block,
     }
@@ -639,8 +623,8 @@ fn render_child(
     let init = struct_init_block_inner(fields, named_fields, ctx, Some((field_ctx.0, Some(child_data), field_ctx.1)));
     let closure = child_data.closure;
     match (ctx.input.named_fields(), hint) {
-        (true, TypeHint::Struct | TypeHint::Unspecified) => if let Some(_) = closure {
-            quote!(#child_name: #child_name(#ty #init),)
+        (true, TypeHint::Struct | TypeHint::Unspecified) => if let Some(closure) = closure {
+            quote!(#child_name: (#closure)(#ty #init),)
         } else {
             quote!(#child_name: #ty #init,)
         },
