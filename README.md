@@ -275,12 +275,19 @@ o2o = "0.5.5"
 
 ### `syn >=2.*`
 
-Currently o2o uses `syn >=1.0.3, <2` by default. If you want `syn >=2.*` to be used, here's the way:
+Currently o2o uses `syn >=1.0.3, <2` by default. If you want `syn >=2.*, <3` to be used, here's the way:
 
 ``` toml
 [dependencies]
 o2o = { version = "0.5.5", default-features = false, features = "syn2" }
 ```
+or, to use `syn >=3.0.6, <4`:
+``` toml
+[dependencies]
+o2o = { version = "0.5.5", default-features = false, features = "syn3" }
+```
+The primary reason to do this is if you use other proc macro libraries that need a specific version of syn, then you
+would prefer not to compile two versions of `syn`. Later versions of `syn` have also generally improved performance. 
 
 ### no_std
 

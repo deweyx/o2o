@@ -14,8 +14,10 @@ proc-macro = true
 o2o-impl = { version = "0.5.5", path = "../o2o-impl", default-features = false }
 syn = { package = "syn", version = "1.0.3", optional = true }
 syn2 = { package = "syn", version = "2.0.0", optional = true }
+syn3 = { package = "syn", version = "3.0.6", optional = true }
 
 [features]
 default = ["syn1"]
 syn1 = ["dep:syn", "o2o-impl/syn"]
 syn2 = ["dep:syn2", "o2o-impl/syn2"]
+syn3 = ["dep:syn3", "o2o-impl/syn3"]

@@ -5,6 +5,8 @@ use proc_macro::TokenStream;
 
 #[cfg(feature = "syn2")]
 use syn2 as syn;
+#[cfg(feature = "syn3")]
+use syn3 as syn;
 
 use syn::{parse_macro_input, DeriveInput};
 

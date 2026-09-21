@@ -6,6 +6,8 @@ use quote::quote;
 
 #[cfg(feature = "syn2")]
 use syn2 as syn;
+#[cfg(feature = "syn3")]
+use syn3 as syn;
 
 use syn::{DeriveInput, Error};
 use test_case::test_case;

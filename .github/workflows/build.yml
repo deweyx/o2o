@@ -24,11 +24,17 @@ jobs:
       run: cargo test -q --package o2o --no-default-features --features syn1
     - name: Run Doc Tests syn2
       run: cargo test -q --package o2o --no-default-features --features syn2
+    - name: Run Doc Tests syn3
+      run: cargo test -q --package o2o --no-default-features --features syn3
     - name: Run Integration Tests syn1
       run: cargo test -q --package o2o-tests --no-default-features --features syn1
     - name: Run Integration Tests syn2
       run: cargo test -q --package o2o-tests --no-default-features --features syn2
+    - name: Run Integration Tests syn3
+      run: cargo test -q --package o2o-tests --no-default-features --features syn3
     - name: Run Impl Tests syn1
       run: cargo test -q --package o2o-impl --no-default-features --features syn
     - name: Run Impl Tests syn2
       run: cargo test -q --package o2o-impl --no-default-features --features syn2
+    - name: Run Impl Tests syn3
+      run: cargo test -q --package o2o-impl --no-default-features --features syn3

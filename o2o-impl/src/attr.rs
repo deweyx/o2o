@@ -5,6 +5,8 @@ use std::ops::{Index, Not};
 
 #[cfg(feature = "syn2")]
 use syn2 as syn;
+#[cfg(feature = "syn3")]
+use syn3 as syn;
 
 use proc_macro2::{Span, TokenStream, TokenTree};
 use quote::{quote, ToTokens};
@@ -1106,7 +1108,7 @@ pub(crate) fn get_data_type_attrs(input: &[Attribute]) -> Result<(DataTypeAttrs,
         #[cfg(feature = "syn")]
         let path = &x.path;
 
-        #[cfg(feature = "syn2")]
+        #[cfg(any(feature = "syn2", feature = "syn3"))]
         let path = x.meta.path();
 
         if path.is_ident("doc") {
@@ -1130,11 +1132,11 @@ pub(crate) fn get_data_type_attrs(input: &[Attribute]) -> Result<(DataTypeAttrs,
             #[cfg(feature = "syn")]
             let tokens = syn::parse2(x.tokens.clone()).map(|x: OptionalParenthesizedTokenStream|x.content())?;
 
-            #[cfg(feature = "syn2")]
+            #[cfg(any(feature = "syn2", feature = "syn3"))]
             let tokens = match &x.meta {
-                syn2::Meta::Path(_) => TokenStream::new(),
-                syn2::Meta::List(l) => l.tokens.clone(),
-                syn2::Meta::NameValue(_) => Err(syn::Error::new(x.span(), "#[name = \"Value\"] syntax is not supported."))?,
+                syn::Meta::Path(_) => TokenStream::new(),
+                syn::Meta::List(l) => l.tokens.clone(),
+                syn::Meta::NameValue(_) => Err(syn::Error::new(x.span(), "#[name = \"Value\"] syntax is not supported."))?,
             };
 
             instrs.push(parse_data_type_instruction(instr, tokens, false, bark)?);
@@ -1184,7 +1186,7 @@ pub(crate) fn get_member_attrs(input: SynDataTypeMember, bark: bool) -> Result<M
         #[cfg(feature = "syn")]
         let path = &x.path;
 
-        #[cfg(feature = "syn2")]
+        #[cfg(any(feature = "syn2", feature = "syn3"))]
         let path = x.meta.path();
 
         if path.is_ident("doc") {
@@ -1203,11 +1205,11 @@ pub(crate) fn get_member_attrs(input: SynDataTypeMember, bark: bool) -> Result<M
             #[cfg(feature = "syn")]
             let tokens = syn::parse2(x.tokens.clone()).map(|x: OptionalParenthesizedTokenStream|x.content())?;
             
-            #[cfg(feature = "syn2")]
+            #[cfg(any(feature = "syn2", feature = "syn3"))]
             let tokens = match &x.meta {
-                syn2::Meta::Path(_) => TokenStream::new(),
-                syn2::Meta::List(l) => l.tokens.clone(),
-                syn2::Meta::NameValue(_) => Err(syn::Error::new(x.span(), "#[name = \"Value\"] syntax is not supported."))?,
+                syn::Meta::Path(_) => TokenStream::new(),
+                syn::Meta::List(l) => l.tokens.clone(),
+                syn::Meta::NameValue(_) => Err(syn::Error::new(x.span(), "#[name = \"Value\"] syntax is not supported."))?,
             };
 
             instrs.push(parse_member_instruction(instr, tokens, false, bark)?);
@@ -1459,7 +1461,7 @@ fn try_parse_child_parents(input: ParseStream) -> Result<Punctuated<ChildParentD
     })
 }
 
-#[cfg(feature = "syn2")]
+#[cfg(any(feature = "syn2", feature = "syn3"))]
 fn try_parse_child_parents(input: ParseStream) -> Result<Punctuated<ChildParentData, Token![,]>> {
     input.parse_terminated(|x| {
         let child_path: Punctuated<Member, Token![.]> = Punctuated::parse_separated_nonempty(x)?;

@@ -5,6 +5,8 @@ use quote::ToTokens;
 
 #[cfg(feature = "syn2")]
 use syn2 as syn;
+#[cfg(feature = "syn3")]
+use syn3 as syn;
 
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;

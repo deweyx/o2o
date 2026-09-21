@@ -17,6 +17,7 @@ o2o-macros = { version = "0.5.5", path = "o2o-macros", default-features = false,
 default = ["syn1"]
 syn1 = ["o2o-impl/syn", "o2o-macros/syn1"]
 syn2 = ["o2o-impl/syn2", "o2o-macros/syn2"]
+syn3 = ["o2o-impl/syn3", "o2o-macros/syn3"]
 
 [workspace]
 members = ["o2o-impl", "o2o-macros", "o2o-tests"]
